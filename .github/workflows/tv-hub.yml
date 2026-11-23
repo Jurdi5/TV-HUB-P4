@@ -1,0 +1,40 @@
+name: TV Hub CI/CD
+
+on:
+  push:
+    branches: [tv-hub-v6.5-logs-base]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Solicitar despliegue del commit validado
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::error::Configura el secreto RENDER_DEPLOY_HOOK en GitHub."
+            exit 1
+          fi
+          if ! curl --fail --silent --output /dev/null --request POST "${RENDER_DEPLOY_HOOK}&ref=${GITHUB_SHA}"; then
+            echo "::error::Render no acept? la solicitud de despliegue."
+            exit 1
+          fi
+          echo "Render acept? la solicitud de despliegue para ${GITHUB_SHA}."
+
